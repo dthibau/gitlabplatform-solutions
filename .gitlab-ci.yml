@@ -15,14 +15,15 @@
 # * Uses site:stage to collect the documentation for multi-module projects.
 # * Publishes the documentation for `master` branch.
 
-image: eclipse-temurin:11-jdk-focal
 default:
-  tags:
-    - docker
+
+
 variables:
   # This will suppress any download for dependencies and plugins or upload messages which would clutter the console log.
   # `showDateTime` will show the passed time in milliseconds. You need to specify `--batch-mode` to make this work.
   MAVEN_OPTS: "-Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+  INTEGRATION_URL: /home/dthibau/Formations/GitlabPlatform/MyWork/Integration
+  PRODUCTION_URL: /home/dthibau/Formations/GitlabPlatform/MyWork/Production
 
 # Cache downloaded dependencies and plugins between builds.
 # To keep cache across branches add 'key: "$CI_JOB_NAME"'
@@ -32,14 +33,47 @@ cache:
 
 stages:
   - build
+  - deploy-integration
+  - deploy-production
 
 
 package:
   stage: build
+  image: eclipse-temurin:11-jdk-focal
+  tags:
+    - docker
   script:
     - echo "Building"
     - ./mvnw $MAVEN_OPTS clean package
   artifacts:
     paths:
       - target/*.jar
+
+deploy-integration:
+  stage: deploy-integration
+  tags:
+    - shell
+  script: 
+    - cp target/*.jar $INTEGRATION_URL
+    - echo "Restarting service"
+  dependencies:
+   - package
+  only:
+    - branches
+  except:
+    - master
+
+
+deploy-production:
+  stage: deploy-integration
+  tags:
+    - shell
+  script: 
+    - cp target/*.jar $PRODUCTION_URL
+    - echo "Restarting service"
+  dependencies:
+   - package
+  only:
+    - main
+
 
