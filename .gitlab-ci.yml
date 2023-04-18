@@ -32,9 +32,22 @@ cache:
     - .m2/repository
 
 stages:
+  - test
   - build
   - deploy-integration
   - deploy-production
+
+Test unitaires:
+  stage: test
+  image: eclipse-temurin:11-jdk-focal
+  tags:
+    - docker
+  script:
+    - echo "Building"
+    - ./mvnw $MAVEN_OPTS -Dmaven.test.failure.ignore=true test
+  artifacts:
+    reports:
+      junit: target/surefire-reports/*.xml
 
 
 package:
