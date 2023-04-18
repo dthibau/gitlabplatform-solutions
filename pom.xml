@@ -15,7 +15,8 @@
 	<description>Demo project for DevOps</description>
 
 	<properties>
-		<java.version>1.8</java.version>
+		<java.version>11</java.version>
+		<jacoco-maven-plugin.version>0.8.9</jacoco-maven-plugin.version>
 	</properties>
 
 	<dependencies>
@@ -66,6 +67,28 @@
 					<executable>true</executable>
 				</configuration>
 			</plugin>
+			<plugin>
+    			<groupId>org.jacoco</groupId>
+    			<artifactId>jacoco-maven-plugin</artifactId>
+    			<version>${jacoco-maven-plugin.version}</version>
+    			<executions>
+        			<execution>
+                        <id>pre-unit-tests</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <!-- Ensures that the code coverage report for unit tests is created after unit tests have been run -->
+                    <execution>
+                        <id>post-unit-test</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+    </executions>
+</plugin>
+
 		</plugins>
 	</build>
 
