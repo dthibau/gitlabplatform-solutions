@@ -64,12 +64,14 @@ stages:
 
 package:
   stage: build
-  image: eclipse-temurin:11-jdk-focal
   tags:
-    - docker
+    - shell
   script:
-    - echo "Building"
+    - echo "Building "
     - ./mvnw -s settings.xml -DslkipTests $MAVEN_OPTS clean deploy
+    - docker login -u $DTHIBAU_LOGIN -p $DTHIBAU_PWD 
+    - docker build -t "dthibau/gitlab-delivry-service:$CI_COMMIT_BRANCH" .
+    - docker push dthibau/gitlab-delivry-service:$CI_COMMIT_BRANCH
   artifacts:
     paths:
       - target/*.jar
@@ -79,8 +81,8 @@ deploy-integration:
   tags:
     - shell
   script: 
-    - cp target/*.jar $INTEGRATION_URL
-    - echo "Restarting service"
+    - echo "Deploying integration"
+
   dependencies:
    - package
   only:
