@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delivery-service-${CI_COMMIT_BRANCH}
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: delivery-service-${CI_COMMIT_BRANCH}
+  template:
+    metadata:
+      labels:
+        name: delivery-service-${CI_COMMIT_BRANCH}
+    spec:
+      containers:
+      - name: delivery-service-${CI_COMMIT_BRANCH}
+        env:
+          - name: SPRING_PROFILES_ACTIVE
+            value: swagger
+        image: dthibau/gitlab-delivery-service:${CI_COMMIT_BRANCH}
+        imagePullPolicy: Always
+      imagePullSecrets:
+        - name: regcred
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: delivery-service-${CI_COMMIT_BRANCH}
+  labels:
+    app: delivery-service-${CI_COMMIT_BRANCH}
+spec:
+  type: LoadBalancer
+  ports:
+   - port: 8080
+  selector:
+   name: delivery-service-${CI_COMMIT_BRANCH}         
+

@@ -40,7 +40,7 @@ cache:
 stages:
 #  - test
   - build
-  - deploy-integration
+  - deploy-review
   - deploy-production
 
 # Test unitaires:
@@ -70,19 +70,27 @@ package:
     - echo "Building "
     - ./mvnw -s settings.xml -DslkipTests $MAVEN_OPTS clean deploy
     - docker login -u $DTHIBAU_LOGIN -p $DTHIBAU_PWD 
-    - docker build -t "dthibau/gitlab-delivry-service:$CI_COMMIT_BRANCH" .
-    - docker push dthibau/gitlab-delivry-service:$CI_COMMIT_BRANCH
+    - docker build -t "$DTHIBAU_LOGIN/gitlab-delivery-service:$CI_COMMIT_BRANCH" .
+    - docker push $DTHIBAU_LOGIN/gitlab-delivery-service:$CI_COMMIT_BRANCH
   artifacts:
     paths:
       - target/*.jar
 
-deploy-integration:
-  stage: deploy-integration
+deploy-review:
+  stage: deploy-review
   tags:
     - shell
+  environment:
+    name: review/$CI_COMMIT_BRANCH
+    url: http://172.23.0.2:32037
   script: 
     - echo "Deploying integration"
-
+    - kubectl config --kubeconfig ./kubeconfig view
+    - kubectl config --kubeconfig ./kubeconfig use-context kind-kind
+    - kubectl config --kubeconfig ./kubeconfig current-context
+    - kubectl --kubeconfig ./kubeconfig delete deployment delivery-service-$CI_COMMIT_BRANCH  
+    - envsubst < delivery-service.yml
+    - envsubst < delivery-service.yml | kubectl --kubeconfig ./kubeconfig apply -f -
   dependencies:
    - package
   only:
@@ -92,7 +100,7 @@ deploy-integration:
 
 
 deploy-production:
-  stage: deploy-integration
+  stage: deploy-production
   tags:
     - shell
   script: 
