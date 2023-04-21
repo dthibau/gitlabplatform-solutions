@@ -41,6 +41,7 @@ stages:
 #  - test
   - build
   - deploy-review
+  - perf-test
   - release
   - deploy-production
 
@@ -98,6 +99,24 @@ deploy-review:
     - branches
   except:
     - main
+
+Tests de charge JMeter:
+  stage: perf-test
+  timeout: 10 minutes
+  tags:
+   - shell
+  script:
+    - echo 'Démarrage 50 users effectuant 100 fois le scénario de test'
+    - sleep 10 
+    - kubectl config --kubeconfig ./kubeconfig use-context kind-kind
+    - HOST=$(kubectl --kubeconfig ./kubeconfig get po -l name=delivery-service-$CI_COMMIT_BRANCH -n default -o jsonpath='{.items[0].status.hostIP}')
+    - PORT=$(kubectl --kubeconfig ./kubeconfig -n default get service delivery-service-$CI_COMMIT_BRANCH -o jsonpath='{.spec.ports[?(@.protocol=="TCP")].nodePort}')
+    - echo "$HOST  $PORT"
+    - ./apache-jmeter-5.2.1/bin/jmeter -JSERVEUR=$HOST -JPORT=$PORT -n -t LoadTest.jmx -l result.jtl
+    - ./apache-jmeter-5.2.1/bin/jmeter -Duser.language=fr -Duser.country -g result.jtl -o ./report
+  artifacts:
+    paths:
+      - report/
 
 release_job:
   stage: release
