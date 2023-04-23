@@ -16,12 +16,142 @@
 # * Publishes the documentation for `master` branch.
 
 include:
-  - template: Terraform.gitlab-ci.yml
+  - template: Code-Quality.gitlab-ci.yml
+   - template: Security/SAST.gitlab-ci.yml
+   - template: Security/Secret-Detection.gitlab-ci.yml
+
+default:
 
 variables:
-# Terraform
-  TF_STATE_NAME: default
-  TF_CACHE_KEY: default
-  TF_ROOT: terraform
-  GITLAB_BASE_URL: ${CI_API_V4_URL}
+  # This will suppress any download for dependencies and plugins or upload messages which would clutter the console log.
+  # `showDateTime` will show the passed time in milliseconds. You need to specify `--batch-mode` to make this work.
+  MAVEN_OPTS: "-Dhttps.protocols=TLSv1.2 -Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showDateTime=true -Djava.awt.headless=true"
+  INTEGRATION_URL: /home/dthibau/Formations/GitlabPlatform/MyWork/Integration
+  PRODUCTION_URL: /home/dthibau/Formations/GitlabPlatform/MyWork/Production
+  SAST_JAVA_VERSION: 11
+
+
+# Cache downloaded dependencies and plugins between builds.
+# To keep cache across branches add 'key: "$CI_JOB_NAME"'
+cache:
+  paths:
+    - .m2/repository
+
+stages:
+  - init
+  - test
+  - validate
+  - build
+  - deploy-review
+  - perf-test
+  - release
+  - deploy
+
+# Test unitaires:
+#  stage: test
+#  image: eclipse-temurin:11-jdk-focal
+#  tags:
+#    - docker
+#  script:
+#    - echo "Building"
+#    - ./mvnw $MAVEN_OPTS -Dmaven.test.failure.ignore=true test
+#    - cat target/site/jacoco/index.html
+#  coverage: /Total.*?([0-9]{1,3})%/
+#  artifacts:
+#    paths:
+#      - target/site/jacoco/
+#    reports:
+#      junit: target/surefire-reports/*.xml
+
+#sast:
+#  stage: test
+
+#package:
+#  stage: build
+#  tags:
+#    - shell
+#  script:
+#    - echo "Building "
+#    - ./mvnw -s settings.xml -DslkipTests $MAVEN_OPTS clean deploy
+#    - docker login -u $DTHIBAU_LOGIN -p $DTHIBAU_PWD 
+#    - docker build -t "$DTHIBAU_LOGIN/gitlab-delivery-service:$CI_COMMIT_BRANCH" .
+#    - docker push $DTHIBAU_LOGIN/gitlab-delivery-service:$CI_COMMIT_BRANCH
+#  artifacts:
+#    paths:
+#      - target/*.jar
+
+deploy-review:
+  stage: deploy-review
+  tags:
+    - shell
+  environment:
+    name: review/$CI_COMMIT_BRANCH
+    url: http://172.23.0.2:32037
+  script: 
+    - echo "Deploying integration"
+    - kubectl config --kubeconfig ./kubeconfig view
+    - kubectl config --kubeconfig ./kubeconfig use-context kind-kind
+    - kubectl config --kubeconfig ./kubeconfig current-context
+    - kubectl --kubeconfig ./kubeconfig delete deployment delivery-service-$CI_COMMIT_BRANCH  
+    - envsubst < delivery-service.yml
+    - envsubst < delivery-service.yml | kubectl --kubeconfig ./kubeconfig apply -f -
+  only:
+    - branches
+  except:
+    - main
+
+Tests de charge JMeter:
+  stage: perf-test
+  timeout: 10 minutes
+  tags:
+   - shell
+  script:
+    - echo 'Démarrage 50 users effectuant 100 fois le scénario de test'
+    - sleep 10 
+    - kubectl config --kubeconfig ./kubeconfig use-context kind-kind
+    - HOST=$(kubectl --kubeconfig ./kubeconfig get po -l name=delivery-service-$CI_COMMIT_BRANCH -n default -o jsonpath='{.items[0].status.hostIP}')
+    - PORT=$(kubectl --kubeconfig ./kubeconfig -n default get service delivery-service-$CI_COMMIT_BRANCH -o jsonpath='{.spec.ports[?(@.protocol=="TCP")].nodePort}')
+    - echo "$HOST  $PORT"
+    - ./apache-jmeter-5.2.1/bin/jmeter -JSERVEUR=$HOST -JPORT=$PORT -n -t LoadTest.jmx -l result.jtl
+    - ./apache-jmeter-5.2.1/bin/jmeter -Duser.language=fr -Duser.country -g result.jtl -o ./report
+  artifacts:
+    paths:
+      - report/
+  only:
+    - branches
+  except:
+    - main
+    
+release_job:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - docker
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never        # Ne pas exécuter si création manuelle de tag
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH  # Branche par défaut
+  script:
+    - echo "running release_job for $TAG"
+  release:                                         
+    tag_name: 'v0.$CI_PIPELINE_IID'      # Version incrémentée par pipeline
+    description: 'v0.$CI_PIPELINE_IID'
+    ref: '$CI_COMMIT_SHA'               # tag créé à partir du SHA1.
+
+
+Deploy production:
+  stage: deploy
+  image: 
+    name: bitnami/kubectl:latest
+    entrypoint: ['']
+  tags:
+    - docker
+  script: 
+    - echo "Deploying to kind"
+    - kubectl config get-contexts
+    - kubectl config use-context dthibau/delivery-service:kind
+    - kubectl apply -f delivery-service.yml
+#  only:
+#    - main
+
 
