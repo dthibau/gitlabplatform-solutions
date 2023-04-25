@@ -15,7 +15,7 @@
 # * Uses site:stage to collect the documentation for multi-module projects.
 # * Publishes the documentation for `master` branch.
 
-image: eclipse-temurin:11.0.18_10-jdk-ubi9-minimal
+image: eclipse-temurin:11-jdk-focal
 default:
   tags:
     - docker
