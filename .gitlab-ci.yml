@@ -16,6 +16,7 @@
 # * Publishes the documentation for `master` branch.
 
 image: eclipse-temurin:11.0.18_10-jdk-ubi9-minimal
+default:
   tags:
     - docker
 variables:
